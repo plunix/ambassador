@@ -352,7 +352,7 @@ def main(config_dir_path:Parameter.REQUIRED, *, no_checks=False, no_debugging=Fa
         logging.debug("Starting periodic updates")
         app.stats_updater = PeriodicTrigger(app.estats.update, period=5)
 
-    app.watchdog = PeriodicTrigger(watchdog, period=5)
+#    app.watchdog = PeriodicTrigger(watchdog, period=5)
 
     app.aconf = AmbassadorConfig(config_dir_path)
 
