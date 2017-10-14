@@ -258,8 +258,7 @@ class AmbassadorConfig (object):
 
     def handle_mapping(self, source_key, obj, obj_name, obj_kind, obj_version):
         method = obj.get("method", "GET")
-        #mapping_key = "%s:%s" % (method, obj['prefix'])
-        mapping_key = obj_name
+        mapping_key = "%s:%s->%s" % (method, obj['prefix'], obj['service'])
 
         if not self.safe_store(source_key, "mapping_prefixes", mapping_key, obj_kind, obj):
             return False
@@ -524,7 +523,7 @@ class AmbassadorConfig (object):
         #     'cluster_diagnostics'
         # )
 
-        # We need to default any unspecified weights
+        # We need to default any unspecified weights and renormalize to 100
         for r in self.envoy_config['routes']:
             clusters = r["clusters"]
             total = 0.0
@@ -538,6 +537,9 @@ class AmbassadorConfig (object):
                 for c in clusters:
                     if c["weight"] is None:
                         c["weight"] = (100.0 - total)/unspecified
+            elif total != 100.0:
+                for c in clusters:
+                    c["weight"] *= 100.0/total
 
         # OK. When all is said and done, sort the list of routes by descending 
         # legnth of prefix, then prefix itself, then method...

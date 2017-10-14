@@ -18,7 +18,12 @@ diediedie() {
     fi
 
     echo "Here's the envoy.json we were trying to run with:"
-    cat /etc/envoy.json
+    LATEST="$(ls -v /etc/envoy*.json | tail -1)"
+    if [ -e "$LATEST" ]; then
+        cat $LATEST
+    else
+        echo "No config generated."
+    fi
 
     echo "AMBASSADOR: shutting down"
     exit 1
@@ -54,44 +59,25 @@ set -o monitor
 trap "handle_chld" CHLD
 trap "handle_int" INT
 
-# XXX: is there a better way to check if we are in kubernetes?
-if [ -nz "$KUBERNETES_SERVICE_HOST" ]; then
-    /usr/bin/python3 "$APPDIR/kubesuck.py" /etc/ambassador-config
-fi
-
-echo "AMBASSADOR: checking /etc/envoy.json"
-/usr/bin/python3 "$APPDIR/ambassador.py" config --check /etc/ambassador-config /etc/envoy.json
-
-STATUS=$?
-
-if [ $STATUS -eq 0 ]; then
-    echo "ENTRYPOINT: starting diagd"
-    /usr/bin/python3 "$APPDIR/diagd.py" --no-debugging /etc/ambassador-config &
-
-    echo "ENTRYPOINT: starting Envoy"
-    /usr/local/bin/envoy -c /etc/envoy.json
-
-    STATUS=$?
-fi
-
-/usr/local/bin/envoy --mode validate -c /etc/envoy.json
+/usr/bin/python3 "$APPDIR/kubewatch.py" sync /etc/ambassador-config /etc/envoy.json 
 
 STATUS=$?
 
 if [ $STATUS -ne 0 ]; then
-    diediedie "envoy" "$STATUS"
+    diediedie "kubewatch sync" "$STATUS"
 fi
 
 echo "AMBASSADOR: starting diagd"
 /usr/bin/python3 "$APPDIR/diagd.py" --no-debugging /etc/ambassador-config &
 pids+=("$!;diagd")
 
-echo "Here's the envoy.json we were trying to run with:"
-cat /etc/envoy.json
-
 echo "AMBASSADOR: starting Envoy"
-/usr/local/bin/envoy -c /etc/envoy.json &
-pids+=("$!;envoy")
+/usr/bin/python3 "$APPDIR/hot-restarter.py" "$APPDIR/start-envoy.sh" &
+RESTARTER_PID="$!"
+pids+=("${RESTARTER_PID};envoy")
+
+/usr/bin/python3 "$APPDIR/kubewatch.py" watch /etc/ambassador-config /etc/envoy.json -p "${RESTARTER_PID}" &
+pids+=("$!;kubewatch")
 
 echo "AMBASSADOR: waiting"
 wait
