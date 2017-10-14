@@ -5,6 +5,7 @@ certs/
 venv
 __pycache__
 VERSION.py
+*.pyc
 
 docs/yaml
 docs/_book
